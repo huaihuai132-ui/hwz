@@ -154,80 +154,162 @@ function initMusicPlayer() {
     
     let isPlaying = false;
     let audioContext;
-    let oscillator;
+    let currentOscillator;
+    let gainNode;
+    let melodyInterval;
     
-    playBtn.addEventListener('click', function() {
-        if (!isPlaying) {
-            // 播放简单的浪漫旋律
-            playRomanticMelody();
-            playBtn.textContent = '⏸️';
-            songTitle.textContent = '正在播放浪漫旋律...';
-            isPlaying = true;
-            
-            // 添加彩虹效果
-            playBtn.classList.add('rainbow-effect');
-        } else {
-            // 停止播放
-            stopMusic();
+    // 检查浏览器是否支持Web Audio API
+    if (!window.AudioContext && !window.webkitAudioContext) {
+        songTitle.textContent = '浏览器不支持音频播放';
+        playBtn.disabled = true;
+        return;
+    }
+    
+    playBtn.addEventListener('click', async function() {
+        console.log('🎵 播放按钮被点击');
+        
+        try {
+            if (!isPlaying) {
+                console.log('🎶 开始播放音乐');
+                
+                // 创建音频上下文（每次点击都重新创建，避免状态问题）
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                console.log('🔊 音频上下文创建成功，状态:', audioContext.state);
+                
+                // 确保音频上下文已启动
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                    console.log('▶️ 音频上下文已恢复');
+                }
+                
+                // 播放浪漫旋律
+                playRomanticMelody();
+                
+                playBtn.textContent = '⏸️';
+                songTitle.textContent = '正在播放浪漫旋律...';
+                isPlaying = true;
+                
+                // 添加彩虹效果
+                playBtn.classList.add('rainbow-effect');
+                console.log('✨ 音乐播放状态已更新');
+            } else {
+                console.log('⏹️ 停止播放音乐');
+                stopMusic();
+                playBtn.textContent = '▶️';
+                songTitle.textContent = '点击播放浪漫音乐';
+                isPlaying = false;
+                
+                // 移除彩虹效果
+                playBtn.classList.remove('rainbow-effect');
+            }
+        } catch (error) {
+            console.error('❌ 音频播放错误:', error);
+            songTitle.textContent = '音频播放失败: ' + error.message;
             playBtn.textContent = '▶️';
-            songTitle.textContent = '点击播放浪漫音乐';
             isPlaying = false;
-            
-            // 移除彩虹效果
             playBtn.classList.remove('rainbow-effect');
         }
     });
     
     function playRomanticMelody() {
-        // 创建音频上下文
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        // 浪漫旋律音符（频率Hz）
+        const melody = [
+            523.25, 587.33, 659.25, 698.46, // C5, D5, E5, F5
+            783.99, 698.46, 659.25, 587.33, // G5, F5, E5, D5
+            523.25, 659.25, 783.99, 880.00, // C5, E5, G5, A5
+            783.99, 659.25, 587.33, 523.25  // G5, E5, D5, C5
+        ];
         
-        // 简单的旋律音符（频率）
-        const melody = [523.25, 587.33, 659.25, 698.46, 783.99, 880.00, 987.77, 1046.50]; // C5到C6
         let noteIndex = 0;
         
-        function playNote() {
-            if (!isPlaying) return;
+        function playNextNote() {
+            if (!isPlaying || !audioContext) {
+                console.log('🛑 播放已停止');
+                return;
+            }
             
-            // 创建振荡器
-            oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            
-            // 连接节点
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            
-            // 设置音符
-            oscillator.frequency.setValueAtTime(melody[noteIndex % melody.length], audioContext.currentTime);
-            oscillator.type = 'sine';
-            
-            // 设置音量包络
-            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-            gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.1);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.8);
-            
-            // 播放音符
-            oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + 0.8);
-            
-            noteIndex++;
-            
-            // 下一个音符
-            if (isPlaying) {
-                setTimeout(playNote, 800);
+            try {
+                const frequency = melody[noteIndex % melody.length];
+                console.log(`🎵 播放音符 ${noteIndex + 1}: ${frequency}Hz`);
+                
+                // 停止之前的音符
+                if (currentOscillator) {
+                    try {
+                        currentOscillator.stop();
+                    } catch (e) {
+                        // 忽略已停止的振荡器
+                    }
+                }
+                
+                // 创建新的振荡器和增益节点
+                currentOscillator = audioContext.createOscillator();
+                gainNode = audioContext.createGain();
+                
+                // 连接音频节点
+                currentOscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                // 设置音符参数
+                currentOscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+                currentOscillator.type = 'sine'; // 使用正弦波，声音更柔和
+                
+                // 设置音量包络（渐入渐出效果）
+                gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.05); // 快速渐入
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5); // 渐出
+                
+                // 播放音符
+                currentOscillator.start(audioContext.currentTime);
+                currentOscillator.stop(audioContext.currentTime + 0.5);
+                
+                noteIndex++;
+                
+                // 循环播放旋律
+                if (noteIndex >= melody.length) {
+                    noteIndex = 0;
+                }
+                
+            } catch (error) {
+                console.error('🚫 播放音符时出错:', error);
             }
         }
         
-        playNote();
+        // 立即播放第一个音符
+        playNextNote();
+        
+        // 设置定时器播放后续音符
+        melodyInterval = setInterval(playNextNote, 600); // 每600ms播放一个音符
     }
     
     function stopMusic() {
+        console.log('🔇 停止音乐播放');
         isPlaying = false;
-        if (oscillator) {
-            oscillator.stop();
+        
+        // 清除定时器
+        if (melodyInterval) {
+            clearInterval(melodyInterval);
+            melodyInterval = null;
         }
-        if (audioContext) {
-            audioContext.close();
+        
+        // 停止当前振荡器
+        if (currentOscillator) {
+            try {
+                currentOscillator.stop();
+            } catch (error) {
+                // 忽略已经停止的振荡器错误
+            }
+            currentOscillator = null;
+        }
+        
+        // 关闭音频上下文
+        if (audioContext && audioContext.state !== 'closed') {
+            audioContext.close().then(() => {
+                console.log('🔕 音频上下文已关闭');
+                audioContext = null;
+            }).catch(error => {
+                console.error('关闭音频上下文时出错:', error);
+                audioContext = null;
+            });
         }
     }
 }
